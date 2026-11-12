@@ -1,0 +1,55 @@
+name: test
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        otp: ["28", "29"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ matrix.otp }}
+          gleam-version: "1.19.2"
+          rebar3-version: "3"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: gleam deps download
+      - run: gleam format --check src test
+      - run: gleam test
+      - run: gleam test --target javascript
+
+  # The generated tables and the differential fixture are reproducible.
+  generated:
+    runs-on: ubuntu-latest
+    env:
+      WHATWG_COMMIT: be17ac5c49881336538acfc7b40dba3c8009144b
+    steps:
+      - uses: actions/checkout@v7
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "28"
+          gleam-version: "1.19.2"
+          rebar3-version: "3"
+      - name: Regenerate the tables
+        run: |
+          git clone --quiet https://github.com/whatwg/encoding /tmp/whatwg
+          git -C /tmp/whatwg checkout --quiet "$WHATWG_COMMIT"
+          python3 -I dev/generate.py /tmp/whatwg "$WHATWG_COMMIT"
+          gleam format src
+      - name: Regenerate the encoding_rs fixture
+        run: |
+          cargo build --release --manifest-path dev/oracle/Cargo.toml
+          python3 -I dev/oracle_vectors.py dev/oracle/target/release/oracle \
+            > test/fixtures/oracle/sweeps.tsv
+      - run: git diff --exit-code
