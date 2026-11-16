@@ -38,8 +38,12 @@ def js_string(literal):
     return text.encode("utf-16", "surrogatepass").decode("utf-16")
 
 
+def int_list(literal):
+    return [int(item, 0) for item in literal.replace("\n", " ").split(",") if item.strip()]
+
+
 def byte_list(literal):
-    return bytes(int(item, 0) for item in literal.replace("\n", " ").split(",") if item.strip())
+    return bytes(int_list(literal))
 
 
 STRING = r"""(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')"""
@@ -96,15 +100,11 @@ def gbk_pointers(path):
     text = path.read_text()
     pointers = re.search(r"const gbkPointers = \[([^\]]*)\]", text).group(1)
     code_points = re.search(r"const codePoints = \[([^\]]*)\]", text).group(1)
-    for pointer, code_point in zip(byte_list_ints(pointers), byte_list_ints(code_points)):
+    for pointer, code_point in zip(int_list(pointers), int_list(code_points)):
         trail = pointer % 190
         offset = 0x40 if trail < 0x3F else 0x41
         data = bytes([pointer // 190 + 0x81, trail + offset])
         yield line("gbk", False, data, chr(code_point))
-
-
-def byte_list_ints(literal):
-    return [int(item, 0) for item in literal.replace("\n", " ").split(",") if item.strip()]
 
 
 def main():
@@ -117,12 +117,10 @@ def main():
     lines += bad_entries(root / "textdecoder-fatal.any.js", with_expected=False)
     lines += bad_entries(root / "textdecoder-utf16-surrogates.any.js", with_expected=True)
     lines += single_asserts(root / "textdecoder-eof.any.js")
-    seen = set()
-    for entry in lines:
-        if entry not in seen:
-            seen.add(entry)
-            print(entry)
-    print(len(seen), "vectors", file=sys.stderr)
+    unique = dict.fromkeys(lines)
+    for entry in unique:
+        print(entry)
+    print(len(unique), "vectors", file=sys.stderr)
 
 
 main()

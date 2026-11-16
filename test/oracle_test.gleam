@@ -33,15 +33,10 @@ fn single() -> List(BitArray) {
   list.map(range(0, 256), fn(b) { <<b>> })
 }
 
-fn pairs() -> List(BitArray) {
+/// `prefix` followed by every two bytes.
+fn pairs_after(prefix: BitArray) -> List(BitArray) {
   list.flat_map(range(0, 256), fn(lead) {
-    list.map(range(0, 256), fn(trail) { <<lead, trail>> })
-  })
-}
-
-fn euc_jp_triples() -> List(BitArray) {
-  list.flat_map(range(0, 256), fn(second) {
-    list.map(range(0, 256), fn(third) { <<0x8F, second, third>> })
+    list.map(range(0, 256), fn(trail) { <<prefix:bits, lead, trail>> })
   })
 }
 
@@ -66,14 +61,6 @@ const escapes = [
   <<0x1B, 0x24, 0x40>>,
   <<0x1B, 0x24, 0x42>>,
 ]
-
-fn iso_2022_jp_states() -> List(BitArray) {
-  list.flat_map(escapes, fn(escape) {
-    list.flat_map(range(0, 256), fn(lead) {
-      list.map(range(0, 256), fn(trail) { <<escape:bits, lead, trail>> })
-    })
-  })
-}
 
 /// The bytes of the escape sequences, and a byte that is valid in every
 /// state.
@@ -147,11 +134,11 @@ fn random_bytes(state: Int, length: Int, acc: List(Int)) -> #(Int, BitArray) {
 fn inputs(encoding: Encoding, sweep: String) -> List(BitArray) {
   case sweep {
     "single" -> single()
-    "pairs" -> pairs()
+    "pairs" -> pairs_after(<<>>)
     "random" -> random(encoding)
-    "euc_jp_triples" -> euc_jp_triples()
+    "euc_jp_triples" -> pairs_after(<<0x8F>>)
     "gb18030_fours" -> gb18030_fours()
-    "iso_2022_jp_states" -> iso_2022_jp_states()
+    "iso_2022_jp_states" -> list.flat_map(escapes, pairs_after)
     "iso_2022_jp_escapes" -> iso_2022_jp_escapes()
     _ -> panic as { "unknown sweep " <> sweep }
   }
@@ -169,19 +156,13 @@ fn digest(encoding: Encoding, inputs: List(BitArray)) -> String {
   |> string.lowercase
 }
 
-fn encoding_named(name: String) -> Encoding {
-  let assert Ok(encoding) =
-    list.find(text_encoding.encodings, fn(e) { text_encoding.name(e) == name })
-  encoding
-}
-
 pub fn sweeps_test() {
   let rows = support.fixture_lines("test/fixtures/oracle/sweeps.tsv")
   assert list.length(rows) == 125
   let failures =
     list.filter_map(rows, fn(fields) {
       let assert [name, sweep, count, expected] = fields
-      let encoding = encoding_named(name)
+      let encoding = support.encoding_named(name)
       let inputs = inputs(encoding, sweep)
       assert int.to_string(list.length(inputs)) == count
       case digest(encoding, inputs) == expected {

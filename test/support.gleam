@@ -4,6 +4,7 @@ import gleam/bit_array
 import gleam/list
 import gleam/string
 import simplifile
+import text_encoding.{type Encoding}
 
 /// Decodes hexadecimal (an even number of digits).
 pub fn hex(text: String) -> BitArray {
@@ -18,4 +19,11 @@ pub fn fixture_lines(path: String) -> List(List(String)) {
   |> string.split("\n")
   |> list.filter(fn(line) { line != "" && !string.starts_with(line, "#") })
   |> list.map(string.split(_, "\t"))
+}
+
+/// The encoding with this name.
+pub fn encoding_named(name: String) -> Encoding {
+  let assert Ok(encoding) =
+    list.find(text_encoding.encodings, fn(e) { text_encoding.name(e) == name })
+  encoding
 }

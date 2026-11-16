@@ -14,7 +14,9 @@
 //// `utf8_decode_without_bom_or_fail` fails instead.
 
 import gleam/bit_array
+import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import gleam/string
 import text_encoding/internal/chinese
 import text_encoding/internal/japanese
@@ -169,66 +171,20 @@ pub fn name(encoding: Encoding) -> String {
 /// encoding that decodes any input to a single U+FFFD. It exists so that
 /// content in those encodings cannot be misread as ASCII.
 pub fn get(label: String) -> Result(Encoding, Nil) {
-  case labels.name(ascii_lowercase(trim(label))) {
-    Ok(name) -> from_name(name)
-    Error(_) -> Error(Nil)
-  }
+  use canonical <- result.try(labels.name(normalize(label)))
+  list.find(encodings, fn(encoding) { name(encoding) == canonical })
 }
 
-fn from_name(name: String) -> Result(Encoding, Nil) {
-  case name {
-    "UTF-8" -> Ok(Utf8)
-    "IBM866" -> Ok(Ibm866)
-    "ISO-8859-2" -> Ok(Iso88592)
-    "ISO-8859-3" -> Ok(Iso88593)
-    "ISO-8859-4" -> Ok(Iso88594)
-    "ISO-8859-5" -> Ok(Iso88595)
-    "ISO-8859-6" -> Ok(Iso88596)
-    "ISO-8859-7" -> Ok(Iso88597)
-    "ISO-8859-8" -> Ok(Iso88598)
-    "ISO-8859-8-I" -> Ok(Iso88598I)
-    "ISO-8859-10" -> Ok(Iso885910)
-    "ISO-8859-13" -> Ok(Iso885913)
-    "ISO-8859-14" -> Ok(Iso885914)
-    "ISO-8859-15" -> Ok(Iso885915)
-    "ISO-8859-16" -> Ok(Iso885916)
-    "KOI8-R" -> Ok(Koi8R)
-    "KOI8-U" -> Ok(Koi8U)
-    "macintosh" -> Ok(Macintosh)
-    "windows-874" -> Ok(Windows874)
-    "windows-1250" -> Ok(Windows1250)
-    "windows-1251" -> Ok(Windows1251)
-    "windows-1252" -> Ok(Windows1252)
-    "windows-1253" -> Ok(Windows1253)
-    "windows-1254" -> Ok(Windows1254)
-    "windows-1255" -> Ok(Windows1255)
-    "windows-1256" -> Ok(Windows1256)
-    "windows-1257" -> Ok(Windows1257)
-    "windows-1258" -> Ok(Windows1258)
-    "x-mac-cyrillic" -> Ok(XMacCyrillic)
-    "GBK" -> Ok(Gbk)
-    "gb18030" -> Ok(Gb18030)
-    "Big5" -> Ok(Big5)
-    "EUC-JP" -> Ok(EucJp)
-    "ISO-2022-JP" -> Ok(Iso2022Jp)
-    "Shift_JIS" -> Ok(ShiftJis)
-    "EUC-KR" -> Ok(EucKr)
-    "replacement" -> Ok(Replacement)
-    "UTF-16BE" -> Ok(Utf16Be)
-    "UTF-16LE" -> Ok(Utf16Le)
-    "x-user-defined" -> Ok(XUserDefined)
-    _ -> Error(Nil)
-  }
-}
-
-/// Removes leading and trailing ASCII whitespace: TAB, LF, FF, CR and SPACE.
-fn trim(label: String) -> String {
+/// Removes leading and trailing ASCII whitespace (TAB, LF, FF, CR and SPACE)
+/// and lowercases ASCII letters. Only ASCII letters: Unicode case mapping
+/// would make, for example, "\u{212A}oi8-r" (KELVIN SIGN) a label.
+fn normalize(label: String) -> String {
   label
   |> string.to_utf_codepoints
   |> drop_whitespace
-  |> reverse([])
+  |> reverse_lowercase([])
   |> drop_whitespace
-  |> reverse([])
+  |> list.reverse
   |> string.from_utf_codepoints
 }
 
@@ -243,23 +199,8 @@ fn drop_whitespace(codepoints: List(UtfCodepoint)) -> List(UtfCodepoint) {
   }
 }
 
-fn reverse(list: List(a), acc: List(a)) -> List(a) {
-  case list {
-    [x, ..rest] -> reverse(rest, [x, ..acc])
-    [] -> acc
-  }
-}
-
-/// Lowercases ASCII letters only. Unicode case mapping would make, for
-/// example, "\u{212A}oi8-r" (KELVIN SIGN) a label.
-fn ascii_lowercase(label: String) -> String {
-  label
-  |> string.to_utf_codepoints
-  |> lowercase_loop([])
-  |> string.from_utf_codepoints
-}
-
-fn lowercase_loop(
+/// Reverses the list, lowercasing ASCII letters.
+fn reverse_lowercase(
   codepoints: List(UtfCodepoint),
   acc: List(UtfCodepoint),
 ) -> List(UtfCodepoint) {
@@ -270,9 +211,9 @@ fn lowercase_loop(
         True, Ok(lower) -> lower
         _, _ -> c
       }
-      lowercase_loop(rest, [c, ..acc])
+      reverse_lowercase(rest, [c, ..acc])
     }
-    [] -> reverse(acc, [])
+    [] -> acc
   }
 }
 

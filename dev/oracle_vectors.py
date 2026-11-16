@@ -51,12 +51,14 @@ def single(_encoding):
     return [bytes([b]) for b in range(256)]
 
 
-def pairs(_encoding):
-    return [bytes([lead, trail]) for lead in range(256) for trail in range(256)]
-
-
-def euc_jp_triples(_encoding):
-    return [bytes([0x8F, second, third]) for second in range(256) for third in range(256)]
+def pairs_after(*prefixes):
+    """Each prefix followed by every two bytes."""
+    return [
+        prefix + bytes([lead, trail])
+        for prefix in prefixes
+        for lead in range(256)
+        for trail in range(256)
+    ]
 
 
 def gb18030_fours(_encoding):
@@ -73,15 +75,6 @@ def gb18030_fours(_encoding):
 
 
 ESCAPES = [b"\x1b(B", b"\x1b(J", b"\x1b(I", b"\x1b$@", b"\x1b$B"]
-
-
-def iso_2022_jp_states(_encoding):
-    return [
-        escape + bytes([lead, trail])
-        for escape in ESCAPES
-        for lead in range(256)
-        for trail in range(256)
-    ]
 
 
 # The bytes of the escape sequences, and a byte that is valid in every state.
@@ -121,12 +114,12 @@ def random_inputs(encoding):
 def sweeps():
     for encoding in ENCODINGS:
         yield encoding, "single", single
-        yield encoding, "pairs", pairs
+        yield encoding, "pairs", lambda _: pairs_after(b"")
         yield encoding, "random", random_inputs
-    yield "EUC-JP", "euc_jp_triples", euc_jp_triples
+    yield "EUC-JP", "euc_jp_triples", lambda _: pairs_after(b"\x8f")
     yield "gb18030", "gb18030_fours", gb18030_fours
     yield "GBK", "gb18030_fours", gb18030_fours
-    yield "ISO-2022-JP", "iso_2022_jp_states", iso_2022_jp_states
+    yield "ISO-2022-JP", "iso_2022_jp_states", lambda _: pairs_after(*ESCAPES)
     yield "ISO-2022-JP", "iso_2022_jp_escapes", iso_2022_jp_escapes
 
 

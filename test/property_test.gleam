@@ -10,23 +10,16 @@ import text_encoding.{type Encoding, KeepBom}
 /// with arbitrary bytes.
 fn bytes() -> qcheck.Generator(BitArray) {
   let structural =
-    qcheck.from_generators(qcheck.constant(0x1B), [
-      qcheck.constant(0x24),
-      qcheck.constant(0x28),
-      qcheck.constant(0x30),
-      qcheck.constant(0x42),
-      qcheck.constant(0x80),
-      qcheck.constant(0x81),
-      qcheck.constant(0x8E),
-      qcheck.constant(0x8F),
-      qcheck.constant(0xA1),
-      qcheck.constant(0xD8),
-      qcheck.constant(0xDC),
-      qcheck.constant(0xE0),
-      qcheck.constant(0xF0),
-      qcheck.constant(0xFE),
-      qcheck.constant(0xFF),
-    ])
+    qcheck.from_generators(
+      qcheck.constant(0x1B),
+      list.map(
+        [
+          0x24, 0x28, 0x30, 0x42, 0x80, 0x81, 0x8E, 0x8F, 0xA1, 0xD8, 0xDC, 0xE0,
+          0xF0, 0xFE, 0xFF,
+        ],
+        qcheck.constant,
+      ),
+    )
   qcheck.generic_list(
     qcheck.from_generators(structural, [qcheck.bounded_int(0, 255)]),
     qcheck.bounded_int(0, 40),

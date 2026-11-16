@@ -7,7 +7,7 @@ import gleam/bit_array
 import gleam/list
 import gleam/string
 import support.{hex}
-import text_encoding.{type Encoding, KeepBom, StripBom}
+import text_encoding.{KeepBom, StripBom}
 
 /// TextDecoder(label, {fatal}).decode(bytes), returning Error(Nil) where
 /// TextDecoder throws.
@@ -169,7 +169,7 @@ pub fn labels_test() {
   assert list.length(rows) == 228
   list.each(rows, fn(fields) {
     let assert [label, name] = fields
-    let expected = encoding_named(name)
+    let expected = Ok(support.encoding_named(name))
     assert text_encoding.get(label) == expected
     assert text_encoding.get(string.uppercase(label)) == expected
     list.each(whitespace, fn(space) {
@@ -178,15 +178,6 @@ pub fn labels_test() {
       assert text_encoding.get(space <> label <> space) == expected
     })
   })
-}
-
-fn encoding_named(name: String) -> Result(Encoding, Nil) {
-  case
-    list.find(text_encoding.encodings, fn(e) { text_encoding.name(e) == name })
-  {
-    Ok(encoding) -> Ok(encoding)
-    Error(_) -> panic as { "no encoding named " <> name }
-  }
 }
 
 pub fn every_encoding_has_a_name_test() {
