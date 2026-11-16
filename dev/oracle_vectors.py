@@ -89,6 +89,16 @@ def iso_2022_jp_escapes(_encoding):
     ]
 
 
+def iso_2022_jp_byte_between(_encoding):
+    """Every escape, then every byte, then every escape."""
+    return [
+        first + bytes([b]) + second
+        for first in ESCAPES
+        for b in range(256)
+        for second in ESCAPES
+    ]
+
+
 def random_inputs(encoding):
     state = (ENCODINGS.index(encoding) + 1) * 7919
 
@@ -121,6 +131,7 @@ def sweeps():
     yield "GBK", "gb18030_fours", gb18030_fours
     yield "ISO-2022-JP", "iso_2022_jp_states", lambda _: pairs_after(*ESCAPES)
     yield "ISO-2022-JP", "iso_2022_jp_escapes", iso_2022_jp_escapes
+    yield "ISO-2022-JP", "iso_2022_jp_byte_between", iso_2022_jp_byte_between
 
 
 def decode_all(oracle, requests):

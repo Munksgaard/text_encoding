@@ -50,12 +50,12 @@ DOS code pages) are not supported, as the standard requires: `get` returns
   ISO-2022-JP, UTF-8, UTF-16 and Big5 decoder tests, and the label and
   byte order mark tests, ported by hand.
 - **Differential tests against [encoding_rs](https://crates.io/crates/encoding_rs)**,
-  Firefox's implementation, each input decoded on its own and compared on
-  the text and the exact error count: every 1- and 2-byte input in every
-  encoding, every 3-byte JIS X 0212 sequence in EUC-JP, every 4-byte
-  gb18030 sequence, every ISO-2022-JP escape followed by every 2-byte input
-  and every sequence of up to 6 escape bytes, and 2,000 seeded random
-  inputs per encoding.
+  Firefox's implementation, compared on the text and the exact error
+  count: every 1- and 2-byte input in every encoding, every 3-byte JIS X
+  0212 sequence in EUC-JP, every ISO-2022-JP escape followed by every
+  2-byte input, every escape-byte-escape triple and every sequence of up to
+  6 escape bytes, and 2,000 seeded random inputs per encoding, each decoded
+  on its own; and every 4-byte gb18030 sequence, in batches.
 - **Properties** with [qcheck](https://hex.pm/packages/qcheck), and
   **doubling tests** that check each decoder runs in linear time.
 

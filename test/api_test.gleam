@@ -173,6 +173,9 @@ pub fn partial_final_byte_test() {
     == Decoded("é\u{FFFD}", Utf8, 1)
   assert text_encoding.decode_with(<<1:size(3)>>, Replacement, KeepBom)
     == Decoded("\u{FFFD}", Replacement, 1)
+  // The replacement decoder gives one U+FFFD for the whole input.
+  assert text_encoding.decode_with(<<0x41, 1:size(3)>>, Replacement, KeepBom)
+    == Decoded("\u{FFFD}", Replacement, 1)
   assert text_encoding.bom_sniff(<<0xFE, 0xFF, 1:size(3)>>) == Some(Utf16Be)
   assert text_encoding.utf8_decode(<<0x41, 1:size(3)>>) == "A\u{FFFD}"
   assert text_encoding.utf8_decode_without_bom(<<0x41, 1:size(3)>>)

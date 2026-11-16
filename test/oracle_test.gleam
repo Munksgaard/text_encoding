@@ -86,6 +86,15 @@ fn sequences(length: Int) -> List(List(BitArray)) {
   }
 }
 
+/// Every escape, then every byte, then every escape.
+fn iso_2022_jp_byte_between() -> List(BitArray) {
+  list.flat_map(escapes, fn(first) {
+    list.flat_map(range(0, 256), fn(b) {
+      list.map(escapes, fn(second) { <<first:bits, b, second:bits>> })
+    })
+  })
+}
+
 fn random(encoding: Encoding) -> List(BitArray) {
   let assert Ok(#(_, index)) =
     text_encoding.encodings
@@ -140,6 +149,7 @@ fn inputs(encoding: Encoding, sweep: String) -> List(BitArray) {
     "gb18030_fours" -> gb18030_fours()
     "iso_2022_jp_states" -> list.flat_map(escapes, pairs_after)
     "iso_2022_jp_escapes" -> iso_2022_jp_escapes()
+    "iso_2022_jp_byte_between" -> iso_2022_jp_byte_between()
     _ -> panic as { "unknown sweep " <> sweep }
   }
 }
@@ -158,7 +168,7 @@ fn digest(encoding: Encoding, inputs: List(BitArray)) -> String {
 
 pub fn sweeps_test() {
   let rows = support.fixture_lines("test/fixtures/oracle/sweeps.tsv")
-  assert list.length(rows) == 125
+  assert list.length(rows) == 126
   let failures =
     list.filter_map(rows, fn(fields) {
       let assert [name, sweep, count, expected] = fields
