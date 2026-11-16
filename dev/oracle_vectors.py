@@ -11,15 +11,16 @@ which must stay in step. Each line is:
 
     <encoding name> <sweep> <number of inputs> <SHA-256 of the results>
 
-The results are, for each input in order, its decoding without BOM handling
-as UTF-8, then the byte 0xFF, then 0x01 if there were errors and 0x00
-otherwise.
+Each input is decoded on its own. The results are, for each input in order,
+its decoding without BOM handling as UTF-8, then the byte 0xFF, then the
+number of errors as a 32-bit big-endian integer.
 
 With `--dump ENCODING SWEEP`, prints each input and result instead, to find
 the input behind a mismatch.
 """
 
 import hashlib
+import itertools
 import subprocess
 import sys
 
@@ -51,20 +52,15 @@ def single(_encoding):
 
 
 def pairs(_encoding):
-    return [
-        b"".join(bytes([lead, trail, 0x20]) for trail in range(256))
-        for lead in range(256)
-    ]
+    return [bytes([lead, trail]) for lead in range(256) for trail in range(256)]
 
 
 def euc_jp_triples(_encoding):
-    return [
-        b"".join(bytes([0x8F, second, third, 0x20]) for third in range(256))
-        for second in range(256)
-    ]
+    return [bytes([0x8F, second, third]) for second in range(256) for third in range(256)]
 
 
 def gb18030_fours(_encoding):
+    # Every four-byte sequence is complete, so they are batched by first byte.
     return [
         b"".join(
             bytes([first, second, third, fourth])
@@ -81,9 +77,22 @@ ESCAPES = [b"\x1b(B", b"\x1b(J", b"\x1b(I", b"\x1b$@", b"\x1b$B"]
 
 def iso_2022_jp_states(_encoding):
     return [
-        escape + b"".join(bytes([lead, trail]) for trail in range(256))
+        escape + bytes([lead, trail])
         for escape in ESCAPES
         for lead in range(256)
+        for trail in range(256)
+    ]
+
+
+# The bytes of the escape sequences, and a byte that is valid in every state.
+ESCAPE_ALPHABET = [0x1B, 0x24, 0x28, 0x42, 0x4A, 0x49, 0x21]
+
+
+def iso_2022_jp_escapes(_encoding):
+    return [
+        bytes(sequence)
+        for length in range(1, 7)
+        for sequence in itertools.product(ESCAPE_ALPHABET, repeat=length)
     ]
 
 
@@ -118,6 +127,7 @@ def sweeps():
     yield "gb18030", "gb18030_fours", gb18030_fours
     yield "GBK", "gb18030_fours", gb18030_fours
     yield "ISO-2022-JP", "iso_2022_jp_states", iso_2022_jp_states
+    yield "ISO-2022-JP", "iso_2022_jp_escapes", iso_2022_jp_escapes
 
 
 def decode_all(oracle, requests):
@@ -126,7 +136,7 @@ def decode_all(oracle, requests):
     outputs = []
     for line in result.stdout.splitlines():
         text, errors = line.split(" ")
-        outputs.append((bytes.fromhex(text), errors == "1"))
+        outputs.append((bytes.fromhex(text), int(errors)))
     assert len(outputs) == len(requests)
     return outputs
 
@@ -140,7 +150,7 @@ def main():
                 inputs = build(encoding)
                 outputs = decode_all(oracle, [(encoding, data) for data in inputs])
                 for data, (text, errors) in zip(inputs, outputs):
-                    print(data.hex(), text.hex(), int(errors))
+                    print(data.hex(), text.hex(), errors)
         return
     plan = [(encoding, sweep, build(encoding)) for encoding, sweep, build in sweeps()]
     requests = [(encoding, data) for encoding, _, inputs in plan for data in inputs]
@@ -150,7 +160,7 @@ def main():
         digest = hashlib.sha256()
         for _ in inputs:
             text, errors = next(outputs)
-            digest.update(text + bytes([0xFF, 1 if errors else 0]))
+            digest.update(text + b"\xff" + errors.to_bytes(4, "big"))
         print("\t".join([encoding, sweep, str(len(inputs)), digest.hexdigest()]))
 
 

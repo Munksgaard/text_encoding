@@ -39,20 +39,23 @@ pub fn main() {
 | [UTF-8 decode without BOM or fail](https://encoding.spec.whatwg.org/#utf-8-decode-without-bom-or-fail) | `utf8_decode_without_bom_or_fail(bytes)` |
 | `TextDecoder` with `fatal` and `ignoreBOM` | `decode_with(bytes, encoding, StripBom \| KeepBom)` and `Decoded.errors` |
 
-Decoding takes a complete `BitArray`; streaming and the encoders are not
-implemented yet. Labels outside the standard (`utf-7`, `utf-32`, EBCDIC and
+Decoding takes a complete `BitArray`; bits after the last whole byte are
+one error. Streaming and the encoders are not implemented yet. Labels outside the standard (`utf-7`, `utf-32`, EBCDIC and
 DOS code pages) are not supported, as the standard requires: `get` returns
 `Error(Nil)` for them.
 
 ## How it is tested
 
-- **web-platform-tests**: the decoder tests from the `encoding/` directory,
-  which browsers run.
+- **web-platform-tests**: vectors extracted from the gb18030, GBK,
+  ISO-2022-JP, UTF-8, UTF-16 and Big5 decoder tests, and the label and
+  byte order mark tests, ported by hand.
 - **Differential tests against [encoding_rs](https://crates.io/crates/encoding_rs)**,
-  Firefox's implementation: every 1- and 2-byte input in every encoding,
-  every 3-byte JIS X 0212 sequence in EUC-JP, every 4-byte gb18030
-  sequence, every ISO-2022-JP state, and 2,000 seeded random inputs per
-  encoding. Both the text and whether there were errors must match.
+  Firefox's implementation, each input decoded on its own and compared on
+  the text and the exact error count: every 1- and 2-byte input in every
+  encoding, every 3-byte JIS X 0212 sequence in EUC-JP, every 4-byte
+  gb18030 sequence, every ISO-2022-JP escape followed by every 2-byte input
+  and every sequence of up to 6 escape bytes, and 2,000 seeded random
+  inputs per encoding.
 - **Properties** with [qcheck](https://hex.pm/packages/qcheck), and
   **doubling tests** that check each decoder runs in linear time.
 

@@ -148,3 +148,35 @@ pub fn readme_example_test() {
   assert text_encoding.decode_with(<<0x82, 0xFF>>, encoding, StripBom)
     == Decoded("\u{FFFD}", ShiftJis, 1)
 }
+
+pub fn sniff_bom_utf16be_overrides_the_encoding_test() {
+  assert text_encoding.decode_with(<<0xFE, 0xFF, 0, 0x41>>, ShiftJis, SniffBom)
+    == Decoded("A", Utf16Be, 0)
+}
+
+pub fn partial_final_byte_test() {
+  // Bits after the last whole byte are one error, and the whole bytes
+  // before them are still decoded.
+  assert text_encoding.decode_with(<<0x41, 1:size(3)>>, Utf8, KeepBom)
+    == Decoded("A\u{FFFD}", Utf8, 1)
+  assert text_encoding.decode_with(<<0x41, 0, 1:size(3)>>, Utf16Le, KeepBom)
+    == Decoded("A\u{FFFD}", Utf16Le, 1)
+  assert text_encoding.decode_with(<<0x82, 0xA0, 1:size(1)>>, ShiftJis, KeepBom)
+    == Decoded("あ\u{FFFD}", ShiftJis, 1)
+  assert text_encoding.decode_with(<<0x80, 1:size(7)>>, Windows1252, KeepBom)
+    == Decoded("€\u{FFFD}", Windows1252, 1)
+  assert text_encoding.decode_with(
+      <<0xEF, 0xBB, 0xBF, 0xC3, 0xA9, 1:size(3)>>,
+      Windows1252,
+      SniffBom,
+    )
+    == Decoded("é\u{FFFD}", Utf8, 1)
+  assert text_encoding.decode_with(<<1:size(3)>>, Replacement, KeepBom)
+    == Decoded("\u{FFFD}", Replacement, 1)
+  assert text_encoding.bom_sniff(<<0xFE, 0xFF, 1:size(3)>>) == Some(Utf16Be)
+  assert text_encoding.utf8_decode(<<0x41, 1:size(3)>>) == "A\u{FFFD}"
+  assert text_encoding.utf8_decode_without_bom(<<0x41, 1:size(3)>>)
+    == "A\u{FFFD}"
+  assert text_encoding.utf8_decode_without_bom_or_fail(<<0x41, 1:size(3)>>)
+    == Error(Nil)
+}

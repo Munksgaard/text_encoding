@@ -49,8 +49,9 @@ def segments(codepoints, unit):
 
 def table(codepoints):
     """Returns the constant body and the lookup function name."""
+    # U+0000 would read as a missing entry.
+    assert 0 not in codepoints
     codepoints = [0 if c is None else c for c in codepoints]
-    assert 0 not in [c for c in codepoints if c is not None and c != 0]
     if max(codepoints) <= 0xFFFF:
         return "<<\n%s\n>>" % segments(codepoints, "utf16"), "lookup16"
     return "<<\n%s\n>>" % segments(codepoints, "utf32"), "lookup32"

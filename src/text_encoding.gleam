@@ -13,6 +13,7 @@
 //// requires. `decode_with` also reports how many errors there were, and
 //// `utf8_decode_without_bom_or_fail` fails instead.
 
+import gleam/bit_array
 import gleam/option.{type Option, None, Some}
 import gleam/string
 import text_encoding/internal/chinese
@@ -289,9 +290,9 @@ pub fn output_encoding(encoding: Encoding) -> Encoding {
 /// `bytes`, if any.
 pub fn bom_sniff(bytes: BitArray) -> Option(Encoding) {
   case bytes {
-    <<0xEF, 0xBB, 0xBF, _:bytes>> -> Some(Utf8)
-    <<0xFE, 0xFF, _:bytes>> -> Some(Utf16Be)
-    <<0xFF, 0xFE, _:bytes>> -> Some(Utf16Le)
+    <<0xEF, 0xBB, 0xBF, _:bits>> -> Some(Utf8)
+    <<0xFE, 0xFF, _:bits>> -> Some(Utf16Be)
+    <<0xFF, 0xFE, _:bits>> -> Some(Utf16Le)
     _ -> None
   }
 }
@@ -302,7 +303,8 @@ pub type Bom {
   /// mark is removed and decides the encoding, whatever encoding was given.
   SniffBom
   /// As `TextDecoder` by default: when decoding UTF-8, UTF-16BE or
-  /// UTF-16LE, a leading U+FEFF is removed. The encoding is never changed.
+  /// UTF-16LE, a leading U+FEFF is removed. The encoding is never changed,
+  /// so a mark for the other byte order decodes as U+FFFE.
   StripBom
   /// As `TextDecoder` with `ignoreBOM`: the text is decoded as is.
   KeepBom
@@ -322,15 +324,15 @@ pub type Decoded {
 }
 
 /// Decodes `bytes` as `encoding`, with the given byte order mark handling,
-/// and counts the errors.
+/// and counts the errors. Bits after the last whole byte are one error.
 pub fn decode_with(bytes: BitArray, encoding: Encoding, bom: Bom) -> Decoded {
   let #(encoding, bytes) = case bom, encoding, bytes {
-    SniffBom, _, <<0xEF, 0xBB, 0xBF, rest:bytes>> -> #(Utf8, rest)
-    SniffBom, _, <<0xFE, 0xFF, rest:bytes>> -> #(Utf16Be, rest)
-    SniffBom, _, <<0xFF, 0xFE, rest:bytes>> -> #(Utf16Le, rest)
-    StripBom, Utf8, <<0xEF, 0xBB, 0xBF, rest:bytes>> -> #(encoding, rest)
-    StripBom, Utf16Be, <<0xFE, 0xFF, rest:bytes>> -> #(encoding, rest)
-    StripBom, Utf16Le, <<0xFF, 0xFE, rest:bytes>> -> #(encoding, rest)
+    SniffBom, _, <<0xEF, 0xBB, 0xBF, rest:bits>> -> #(Utf8, rest)
+    SniffBom, _, <<0xFE, 0xFF, rest:bits>> -> #(Utf16Be, rest)
+    SniffBom, _, <<0xFF, 0xFE, rest:bits>> -> #(Utf16Le, rest)
+    StripBom, Utf8, <<0xEF, 0xBB, 0xBF, rest:bits>> -> #(encoding, rest)
+    StripBom, Utf16Be, <<0xFE, 0xFF, rest:bits>> -> #(encoding, rest)
+    StripBom, Utf16Le, <<0xFF, 0xFE, rest:bits>> -> #(encoding, rest)
     _, _, _ -> #(encoding, bytes)
   }
   let #(text, errors) = run(bytes, encoding)
@@ -353,17 +355,37 @@ pub fn utf8_decode(bytes: BitArray) -> String {
 /// "UTF-8 decode without BOM": decodes UTF-8; a byte order mark is kept as
 /// U+FEFF. Errors become U+FFFD.
 pub fn utf8_decode_without_bom(bytes: BitArray) -> String {
-  utf8.decode(bytes).0
+  run(bytes, Utf8).0
 }
 
 /// "UTF-8 decode without BOM or fail": decodes UTF-8, or fails if the bytes
-/// are not valid UTF-8. A byte order mark is kept as U+FEFF.
+/// are not valid UTF-8. A byte order mark is kept as U+FEFF. For other
+/// encodings, decoding fails in the standard's "fatal" mode exactly when
+/// `decode_with(..).errors` is not 0.
 pub fn utf8_decode_without_bom_or_fail(bytes: BitArray) -> Result(String, Nil) {
   output.validate(bytes)
 }
 
-/// Runs the decoder of `encoding` over all of `bytes`.
+/// Runs the decoder of `encoding` over all of `bytes`. Bits after the last
+/// whole byte are one error.
 fn run(bytes: BitArray, encoding: Encoding) -> #(String, Int) {
+  let size = bit_array.bit_size(bytes)
+  case size % 8, bytes {
+    0, _ -> run_bytes(bytes, encoding)
+    _, <<whole:bytes-size(size / 8), _:bits>> -> {
+      let #(text, errors) = run_bytes(whole, encoding)
+      case encoding, errors {
+        // The replacement decoder gives one U+FFFD for any input.
+        Replacement, 1 -> #(text, errors)
+        _, _ -> #(text <> "\u{FFFD}", errors + 1)
+      }
+    }
+    // Unreachable: the pattern above matches any partial final byte.
+    _, _ -> run_bytes(bytes, encoding)
+  }
+}
+
+fn run_bytes(bytes: BitArray, encoding: Encoding) -> #(String, Int) {
   case encoding {
     Utf8 -> utf8.decode(bytes)
     Utf16Be -> utf16.decode(bytes, True)

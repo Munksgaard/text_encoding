@@ -1,8 +1,9 @@
 //! Decodes inputs with encoding_rs, for dev/oracle_vectors.py.
 //!
 //! Reads lines "<encoding name> <input as hex>" and writes lines
-//! "<output UTF-8 as hex> <1 if there were errors, else 0>". Decoding is
-//! without BOM handling, as the spec's decoders are.
+//! "<output UTF-8 as hex> <number of errors>". Decoding is without BOM
+//! handling, as the spec's decoders are, and each error is replaced with
+//! U+FFFD.
 
 use encoding_rs::*;
 use std::io::{BufRead, Write};
@@ -30,8 +31,25 @@ fn main() {
             .iter()
             .find(|e| e.name() == name)
             .unwrap_or_else(|| panic!("unknown encoding {name}"));
-        let (text, had_errors) = encoding.decode_without_bom_handling(&bytes);
+        let mut decoder = encoding.new_decoder_without_bom_handling();
+        let mut text = String::new();
+        let mut errors = 0;
+        let mut rest = &bytes[..];
+        loop {
+            let (result, read) =
+                decoder.decode_to_string_without_replacement(rest, &mut text, true);
+            rest = &rest[read..];
+            match result {
+                DecoderResult::InputEmpty => break,
+                DecoderResult::Malformed(_, _) => {
+                    text.push('\u{FFFD}');
+                    errors += 1;
+                }
+                DecoderResult::OutputFull => text.reserve(64 + 4 * rest.len()),
+            }
+        }
+        assert_eq!(text, encoding.decode_without_bom_handling(&bytes).0);
         let output: String = text.as_bytes().iter().map(|b| format!("{:02x}", b)).collect();
-        writeln!(out, "{} {}", output, had_errors as u8).unwrap();
+        writeln!(out, "{} {}", output, errors).unwrap();
     }
 }
