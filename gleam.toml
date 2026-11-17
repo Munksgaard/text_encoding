@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "The WHATWG Encoding Standard's decoders in pure Gleam: UTF-8, UTF-16, legacy single-byte and CJK encodings"
 licences = ["Apache-2.0"]
 internal_modules = ["text_encoding/internal", "text_encoding/internal/*"]
-# repository = { type = "github", user = "", repo = "" }
+repository = { type = "github", user = "Munksgaard", repo = "text_encoding" }
 
 [dependencies]
 gleam_stdlib = ">= 1.0.0 and < 2.0.0"
